@@ -10,7 +10,9 @@
 }
 html, body { margin: 0; }
 body { background: #0b111b; color: #d6e4f0; font-family: system-ui, sans-serif; }
-.app { max-width: 1200px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 24px; }
+.frame { height: 100vh; }
+/* The orb sits in the middle of the frame's left column. */
+.frame .jv-shell-side { justify-content: center; align-items: center; }
 .command {
   position: fixed; top: 24px; left: 50%; z-index: 10; width: min(1168px, calc(100% - 32px)); translate: -50% 0;
   display: flex; gap: 8px; transition: opacity 200ms, transform 200ms;

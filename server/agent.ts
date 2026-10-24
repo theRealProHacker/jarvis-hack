@@ -1,7 +1,7 @@
 /*
  * Jarvis: one long-lived Claude Agent SDK session the browser talks to.
  *   POST /api/say { system, text }        -> queues a user turn (the first one starts the session)
- *   GET  /api/events                      -> SSE: spoken text, HUD programs, end of turn
+ *   GET  /api/events                      -> SSE: spoken text, HUD programs, status line, end of turn
  *   POST /api/ui-result { id, height, available, width } -> the browser's measurement of a show_ui call
  *   GET  /api/speak?text=…                -> ElevenLabs speech for one reply (mp3, streamed)
  */
@@ -16,6 +16,7 @@ const PERSONA = `You are Jarvis, a voice assistant. The user talks to you out lo
 - Reply in one or two short spoken sentences. No markdown, lists or code in replies, and never read out a program.
 - Put detail on the HUD: call show_ui with a complete OpenUI Lang program whenever a visual helps or the user asks for one. Each call replaces the whole HUD. Leave the HUD alone when the user only asks a question.
 - Use WebSearch and WebFetch for anything current (weather, news, prices, places, events). Never invent live data.
+- Before anything that takes a moment (searching, fetching, building the HUD), call set_status with a few words saying what you are doing, e.g. "Checking Berlin weather". Call it with "Standing by" when you are done.
 - show_ui's result says whether the HUD fit the screen. If it didn't, call show_ui again with a smaller layout, at most twice.`
 
 const VOICE = 'JBFqnCBsd6RMkjVDRZzb'
@@ -26,6 +27,7 @@ type Event =
   | { type: 'ui_start' }
   | { type: 'ui_partial'; program: string }
   | { type: 'ui'; id: string; program: string }
+  | { type: 'status'; text: string }
   | { type: 'done' }
 
 const clients = new Set<ServerResponse>()
@@ -47,6 +49,17 @@ const showUi = tool(
     })
     measured.delete(id)
     return { content: [{ type: 'text', text: result }] }
+  },
+  { alwaysLoad: true },
+)
+
+const setStatus = tool(
+  'set_status',
+  'Set the one-line status shown in the HUD frame, e.g. "Searching the web". A few words.',
+  { text: z.string() },
+  async ({ text }) => {
+    send({ type: 'status', text })
+    return { content: [{ type: 'text', text: 'Status set.' }] }
   },
   { alwaysLoad: true },
 )
@@ -99,8 +112,8 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string }): Pl
         effort: 'low',
         systemPrompt: `${PERSONA}\n\n${system}`,
         tools: ['WebSearch', 'WebFetch'],
-        allowedTools: ['WebSearch', 'WebFetch', 'mcp__jarvis__show_ui'],
-        mcpServers: { jarvis: createSdkMcpServer({ name: 'jarvis', tools: [showUi] }) },
+        allowedTools: ['WebSearch', 'WebFetch', 'mcp__jarvis__show_ui', 'mcp__jarvis__set_status'],
+        mcpServers: { jarvis: createSdkMcpServer({ name: 'jarvis', tools: [showUi, setStatus] }) },
         includePartialMessages: true,
         // Isolated from the developer's own Claude Code setup (settings, hooks, CLAUDE.md, session files).
         settingSources: [],

@@ -1,4 +1,4 @@
-import { JarvisProvider, Renderer, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
+import { HudShell, JarvisProvider, Renderer, StatusLine, VoiceOrb, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import HEIGHTS from './component-heights.json'
 import { record, type Recording } from './voice'
@@ -19,6 +19,7 @@ type Event =
   | { type: 'ui_start' }
   | { type: 'ui_partial'; program: string }
   | { type: 'ui'; id: string; program: string }
+  | { type: 'status'; text: string }
   | { type: 'done' }
 
 declare global {
@@ -46,12 +47,19 @@ async function settledHeight(el: HTMLElement) {
   return last
 }
 
+// The HUD scrolls inside the frame's content area; the agent's layout has to fit its visible height.
+const availableHeight = (stage: HTMLElement) => Math.floor(stage.parentElement!.clientHeight - 8)
+
 export function App() {
   const [prompt, setPrompt] = useState('')
   const [response, setResponse] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [runKey, setRunKey] = useState(0)
   const [listening, setListening] = useState(false)
+  // The frame around the HUD: a status line the agent sets, and the voice orb.
+  const [status, setStatus] = useState('Standing by')
+  const [thinking, setThinking] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
   const stage = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   // The command bar floats over the HUD, hidden until "/" or push-to-talk opens it; sending or Escape hides it again.
@@ -68,15 +76,25 @@ export function App() {
         new Promise<void>((done) => {
           if (!v.playing.has(audio)) return done()
           audio.onended = audio.onerror = audio.onpause = () => done()
+          audio.onplaying = () => {
+            setSpeaking(true)
+            setThinking(false)
+          }
           audio.play().catch(() => done())
         }),
     )
-    v.queue.then(() => v.playing.delete(audio))
+    v.queue.then(() => {
+      v.playing.delete(audio)
+      if (v.playing.size) return
+      setSpeaking(false)
+      setThinking(false)
+    })
   }
 
   function hush() {
     voice.current.playing.forEach((a) => a.pause())
     voice.current.playing.clear()
+    setSpeaking(false)
   }
 
   useEffect(() => {
@@ -125,12 +143,15 @@ export function App() {
         setResponse('')
         setStreaming(true)
       } else if (e.type === 'ui_partial') setResponse(unfence(e.program))
+      else if (e.type === 'status') setStatus(e.text)
+      // A reply still waiting for its audio keeps the orb thinking until it starts to play.
+      else if (e.type === 'done' && !voice.current.playing.size) setThinking(false)
       else if (e.type === 'ui') {
         setResponse(unfence(e.program))
         setStreaming(false)
         // Report the rendered height back to the agent, which rebuilds the HUD if it overflows.
         const el = stage.current!
-        const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - 24)
+        const available = availableHeight(el)
         const height = await settledHeight(el)
         ;(window.__fit ??= []).push({ height, available, fits: height <= available })
         fetch('/api/ui-result', { method: 'POST', body: JSON.stringify({ id: e.id, height, available, width: el.clientWidth }) })
@@ -143,8 +164,9 @@ export function App() {
     if (!text.trim()) return
     setOpen(false)
     setPrompt('')
+    setThinking(true)
     const el = stage.current!
-    const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - 24)
+    const available = availableHeight(el)
     const now = new Date()
     const context = `It is ${now.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })} (time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}). The HUD is shown on a screen area of ${el.clientWidth}×${available}px and must fit without scrolling.`
     fetch('/api/say', { method: 'POST', body: JSON.stringify({ system: SYSTEM, text: `${text}\n\n(${context})` }) })
@@ -194,9 +216,20 @@ export function App() {
         </button>
       </form>
       <JarvisProvider mode="jarvis">
-        <div className="stage" ref={stage}>
-          <Renderer key={runKey} library={jarvisLibrary} response={response} isStreaming={streaming} />
-        </div>
+        <HudShell
+          mode="jarvis"
+          className="frame"
+          header={
+            <div data-jv-case="sentence">
+              <StatusLine key={status} items={[{ label: status }]} size={16} marker />
+            </div>
+          }
+          sidebar={<VoiceOrb state={listening ? 'listening' : speaking ? 'speaking' : thinking ? 'thinking' : 'idle'} size={180} />}
+        >
+          <div className="stage" ref={stage}>
+            <Renderer key={runKey} library={jarvisLibrary} response={response} isStreaming={streaming} />
+          </div>
+        </HudShell>
       </JarvisProvider>
     </div>
   )
