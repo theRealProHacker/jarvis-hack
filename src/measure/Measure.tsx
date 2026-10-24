@@ -1,5 +1,4 @@
-import { Renderer } from '@openuidev/react-lang'
-import { JarvisProvider, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
+import { JarvisProvider, Renderer, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
 import { useEffect, useState } from 'react'
 
 /*

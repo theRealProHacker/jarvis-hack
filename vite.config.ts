@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import Anthropic from '@anthropic-ai/sdk'
 import { resolve } from 'node:path'
+import { jarvisAgent } from './server/agent'
 
 const kit = resolve(import.meta.dirname, '../jarvis-ui/packages/kit/src')
 
@@ -62,7 +63,12 @@ function reson8Token(apiKey: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, import.meta.dirname, '')
   return {
-    plugins: [claudeApi(env.ANTHROPIC_API_KEY!), reson8Token(env.RESON8_API_KEY!), react()],
+    plugins: [
+      claudeApi(env.ANTHROPIC_API_KEY!),
+      reson8Token(env.RESON8_API_KEY!),
+      jarvisAgent({ anthropic: env.ANTHROPIC_API_KEY!, elevenlabs: env.ELEVENLABS_API_KEY! }),
+      react(),
+    ],
     resolve: {
       alias: [
         { find: /^@jarvis-ui\/kit\/holo$/, replacement: `${kit}/holo.ts` },
