@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@jarvis-ui/kit": ["../jarvis-ui/packages/kit/src/index.ts"],
+      "@jarvis-ui/kit/holo": ["../jarvis-ui/packages/kit/src/holo.ts"]
+    }
+  },
+  "include": ["src"]
+}

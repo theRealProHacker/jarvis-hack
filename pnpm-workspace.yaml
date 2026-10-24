@@ -1,0 +1,3 @@
+# lang-core's postinstall is telemetry only; never run it.
+allowBuilds:
+  '@openuidev/lang-core': false
