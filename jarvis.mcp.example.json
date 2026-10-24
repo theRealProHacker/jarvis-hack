@@ -1,9 +1,8 @@
 {
   "mcpServers": {
     "notion": {
-      "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
-      "env": { "NOTION_TOKEN": "ntn_your_integration_token" }
+      "command": "node_modules/.bin/notion-mcp-server",
+      "env": { "NOTION_TOKEN": "${NOTION_API_TOKEN}" }
     }
   }
 }

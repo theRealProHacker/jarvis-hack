@@ -24,7 +24,7 @@ const PERSONA = `You are Jarvis, a voice assistant. The user talks to you out lo
 - Pick the theme to suit the moment with set_theme: jarvis for everyday use, friday when the user asks for FRIDAY, battle for fights, threats and alarms, targeting for tracking and aiming, patriot for Iron Patriot. Set it before changing the HUD so it builds in the right colors.
 - Other tools may give you the user's own data (notes, todos, calendars); use them when the user asks about their stuff.`
 
-const VOICE = 'JBFqnCBsd6RMkjVDRZzb'
+const VOICE = 'CUvmi6RSy4BQr6vnMyEw'
 
 const MODES = ['jarvis', 'friday', 'battle', 'targeting', 'patriot'] as const
 type Mode = (typeof MODES)[number]
@@ -107,12 +107,18 @@ const setTheme = tool(
 function inbox() {
   const waiting: SDKUserMessage[] = []
   let wake = () => {}
+  let ready: Promise<unknown> = Promise.resolve()
   return {
+    // The first turn waits for this, e.g. until the MCP servers have connected.
+    waitFor(p: Promise<unknown>) {
+      ready = p
+    },
     push(text: string) {
       waiting.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, origin: { kind: 'human' } })
       wake()
     },
     async *messages() {
+      await ready
       for (;;) {
         while (waiting.length) yield waiting.shift()!
         await new Promise<void>((r) => (wake = r))
@@ -138,19 +144,20 @@ const readJson = async (req: IncomingMessage) => {
   return JSON.parse(body)
 }
 
-// { mcpServers: { name: config } }, as in Claude Code's .mcp.json. Gitignored: it holds tokens.
-function userMcpServers(): Record<string, McpServerConfig> {
+// { mcpServers: { name: config } }, as in Claude Code's .mcp.json. \${VAR} is filled in from .env, so tokens stay there.
+function userMcpServers(env: Record<string, string>): Record<string, McpServerConfig> {
   const file = new URL('../jarvis.mcp.json', import.meta.url)
-  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).mcpServers : {}
+  if (!existsSync(file)) return {}
+  return JSON.parse(readFileSync(file, 'utf8').replace(/\$\{(\w+)\}/g, (_, name) => env[name] ?? '')).mcpServers
 }
 
-export function jarvisAgent(keys: { anthropic: string; elevenlabs: string }): Plugin {
+export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: Record<string, string> }): Plugin {
   let session: ReturnType<typeof inbox> | null = null
 
   function start(system: string) {
     const box = inbox()
     session = box
-    const mcp = userMcpServers()
+    const mcp = userMcpServers(keys.env)
     const q = query({
       prompt: box.messages(),
       options: {
@@ -167,6 +174,13 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string }): Pl
         env: { ...process.env, ANTHROPIC_API_KEY: keys.anthropic },
       },
     })
+    // Without this the first turn can start before a slow MCP server is up, and its tools are missing.
+    box.waitFor(
+      (async () => {
+        for (let i = 0; i < 30 && (await q.mcpServerStatus()).some((s) => s.status === 'pending'); i++)
+          await new Promise((r) => setTimeout(r, 500))
+      })().catch(() => {}),
+    )
     let ui: { index: number; json: string } | null = null
     const handle = (m: SDKMessage) => {
       if (m.type === 'result') return send({ type: 'done' })

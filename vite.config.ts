@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       claudeApi(env.ANTHROPIC_API_KEY!),
       reson8Token(env.RESON8_API_KEY!),
-      jarvisAgent({ anthropic: env.ANTHROPIC_API_KEY!, elevenlabs: env.ELEVENLABS_API_KEY! }),
+      jarvisAgent({ anthropic: env.ANTHROPIC_API_KEY!, elevenlabs: env.ELEVENLABS_API_KEY!, env }),
       react(),
     ],
     resolve: {
