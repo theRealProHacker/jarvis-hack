@@ -43,10 +43,17 @@ function reson8Token(apiKey: string): Plugin {
     name: 'reson8-token',
     configureServer(server) {
       server.middlewares.use('/api/reson8-token', async (_req, res) => {
-        const r = await fetch('https://api.reson8.dev/v1/auth/token', { method: 'POST', headers: { Authorization: `ApiKey ${apiKey}` } })
-        res.statusCode = r.status
         res.setHeader('Content-Type', 'application/json')
-        res.end(await r.text())
+        try {
+          const r = await fetch('https://api.reson8.dev/v1/auth/token', { method: 'POST', headers: { Authorization: `ApiKey ${apiKey}` } })
+          res.statusCode = r.status
+          res.end(await r.text())
+        } catch (err) {
+          // A network failure must fail this request, not crash the dev server.
+          console.error(err)
+          res.statusCode = 502
+          res.end('{}')
+        }
       })
     },
   }

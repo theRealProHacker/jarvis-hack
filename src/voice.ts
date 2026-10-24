@@ -24,7 +24,9 @@ export interface Recording {
 }
 
 export async function record(onText: (text: string) => void): Promise<Recording> {
-  const { access_token } = await (await fetch('/api/reson8-token', { method: 'POST' })).json()
+  const res = await fetch('/api/reson8-token', { method: 'POST' })
+  if (!res.ok) throw new Error(`Reson8 token request failed (${res.status})`)
+  const { access_token } = await res.json()
   const ws = new WebSocket(URL, ['bearer', access_token])
   ws.binaryType = 'arraybuffer'
   const mic = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })

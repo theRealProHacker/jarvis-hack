@@ -1,6 +1,6 @@
 import { Renderer } from '@openuidev/react-lang'
 import { JarvisProvider, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import HEIGHTS from './component-heights.json'
 import { record, type Recording } from './voice'
 
@@ -51,6 +51,27 @@ export function App() {
   const [listening, setListening] = useState(false)
   const recording = useRef<Recording | null>(null)
   const stage = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+  // The command bar floats over the HUD: it hides once a build starts, "/" brings it back and Escape hides it.
+  const [open, setOpen] = useState(true)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        input.current?.blur()
+        setOpen(false)
+      } else if (e.key === '/' && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault()
+        setOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    if (open) input.current?.focus()
+  }, [open])
 
   async function generate(messages: Message[]) {
     setRunKey((k) => k + 1)
@@ -95,6 +116,7 @@ export function App() {
   async function build(prompt: string) {
     if (!prompt.trim() || busy) return
     setBusy(true)
+    setOpen(false)
     window.__fit = []
     try {
       const el = stage.current!
@@ -114,6 +136,7 @@ export function App() {
         })
       }
     } finally {
+      setPrompt('')
       setBusy(false)
     }
   }
@@ -122,12 +145,14 @@ export function App() {
     <div className="app">
       <form
         className="command"
+        data-open={open}
+        inert={!open}
         onSubmit={(e: FormEvent) => {
           e.preventDefault()
           build(prompt)
         }}
       >
-        <input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your HUD" aria-label="Command" autoFocus />
+        <input value={prompt} onChange={(e) => setPrompt(e.target.value)} ref={input} placeholder="Describe your HUD" aria-label="Command" />
         <button type="button" className="mic" onClick={talk} disabled={busy} aria-pressed={listening}>
           {listening ? 'Stop' : 'Talk'}
         </button>
