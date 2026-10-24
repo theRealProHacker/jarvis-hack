@@ -62,7 +62,7 @@ const HOME = { lat: 52.52675, lon: 13.39079, place: 'Linienstraße 144, Berlin' 
 // Live readings in the default HUD: the laptop's battery. They refresh as long as the HUD still shows them as
 // generated here; once the agent changes them, they are left alone.
 type Device = { battery?: number; charging?: boolean }
-const live = (d: Device) =>
+export const live = (d: Device) =>
   [
     `position = Map({lat: ${HOME.lat}, lon: ${HOME.lon}}, 14, [{lat: ${HOME.lat}, lon: ${HOME.lon}, label: "You"}])`,
     `power = Progress(${d.battery ?? 0}, 100, "bar", "${d.charging ? 'Battery charging' : 'Battery'}")`,
@@ -70,7 +70,7 @@ const live = (d: Device) =>
 
 // The HUD the page starts with: a Mark VII flight display on simulated readings, laid out like the films'
 // helmet cam: instruments round the edges, the centre left clear for flying. The agent edits it.
-const DEFAULT_HUD = `root = Stack([hud])
+export const DEFAULT_HUD = `root = Stack([hud])
 hud = Orbit({bigTopLeft: radar, bigLeft: altitude, bigRight: position, bigBottomRight: suit, smallCluster1: clock, smallCluster2: power})
 radar = Radar([{angle: 42, dist: 0.62, tone: "danger"}, {angle: 118, dist: 0.35}, {angle: 290, dist: 0.8, tone: "ok"}], 150, "Range 40 km")
 altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
@@ -91,7 +91,7 @@ function statements(program: string) {
 
 // Applies an edit: its statements replace same-named ones (moved to the end, so a statement still
 // streaming in is last), and removed names are dropped.
-function merge(base: string, edit: string, remove: string[] = []) {
+export function merge(base: string, edit: string, remove: string[] = []) {
   const all = new Map(statements(base))
   for (const [name, text] of statements(edit)) {
     all.delete(name)

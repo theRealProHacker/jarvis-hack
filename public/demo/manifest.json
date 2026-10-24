@@ -1,0 +1,21 @@
+{
+  "n1": "nPczCjzI2devNBz1zQrb:Every AI assistant gets measured against one benchmark: Jarvis.",
+  "n2": "nPczCjzI2devNBz1zQrb:So I built one that behaves like the original. It talks, and Claude builds the interface live. The hard part was keeping the agent on theme: real HUD components only, never a generic web page.",
+  "u1": "nPczCjzI2devNBz1zQrb:Jarvis, put two minutes on the clock.",
+  "j1": "mMc1jJdsmogeUDdTvGEf:Two minutes, sir. The countdown is up top.",
+  "u2": "nPczCjzI2devNBz1zQrb:Plot a course to the Brandenburg Gate.",
+  "j2": "mMc1jJdsmogeUDdTvGEf:Brandenburg Gate is one point five kilometres south-west, heading two one seven. It's on your map.",
+  "u3": "nPczCjzI2devNBz1zQrb:How's Alphabet doing?",
+  "j3": "mMc1jJdsmogeUDdTvGEf:Alphabet closed at three hundred and twenty dollars, down five percent this month. Chart's top left.",
+  "u4": "nPczCjzI2devNBz1zQrb:Why is it down? Check the news.",
+  "j4": "mMc1jJdsmogeUDdTvGEf:MarketBeat says Citizens JMP cut its target to four hundred and fifty dollars, and the AI sell-off is weighing on it. Earnings are on the twenty-eighth. Sources, top right.",
+  "u5": "nPczCjzI2devNBz1zQrb:Weather for tonight's flight?",
+  "j5": "mMc1jJdsmogeUDdTvGEf:Berlin is overcast, ten degrees, wind fifteen kilometres an hour. Fine for flying. Lower right.",
+  "u6": "nPczCjzI2devNBz1zQrb:Download the Mark Eight firmware and run a diagnostic.",
+  "j6": "mMc1jJdsmogeUDdTvGEf:Firmware is in. Every thruster is above ninety percent, except the left boot at seventy-eight.",
+  "u7": "nPczCjzI2devNBz1zQrb:Jarvis, battle mode.",
+  "j7": "mMc1jJdsmogeUDdTvGEf:Combat mode. Reticle is up, three targets locked, shields holding.",
+  "n3": "nPczCjzI2devNBz1zQrb:Jarvis is just the costume for a hackathon. The point is generative UI in your own theme: an interface that rebuilds itself around whoever sits in front of it. Run it for yourself, or build it into your product. People are reverse-engineering SaaS tools to personalize them, and it's killing those companies. This could save them.",
+  "u8": "nPczCjzI2devNBz1zQrb:Find where I set the left boot.",
+  "j8": "mMc1jJdsmogeUDdTvGEf:Found it. Line twelve of thrusters dot toml caps the left boot at seventy-eight percent."
+}

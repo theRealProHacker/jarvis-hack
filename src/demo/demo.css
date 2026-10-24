@@ -1,0 +1,13 @@
+.demo-black { position: fixed; inset: 0; background: #000; }
+.demo-status { display: flex; align-items: center; gap: 10px; }
+/* The transcript line sits beside the orb, below the market strip. */
+.demo-bottom { position: relative; }
+.demo-caption { position: absolute; left: calc(50% + 78px); top: 10px; width: min(60ch, 34vw); font-size: 18px; }
+/* The centre slot is sized for something small; battle mode's reticle should fill the clear window. */
+.jv-orbit-slot[data-slot="center"]:has(.jv-reticle) { transform: scale(2.2); }
+.demo-backdrop, .demo-backdrop > * { position: fixed; inset: 0; width: 100%; height: 100%; }
+.demo-over { position: relative; z-index: 1; }
+.demo-over .jv-shell { background: transparent; }
+/* Dim the city so it stays behind the HUD. */
+.demo-city { filter: brightness(0.55) saturate(0.8); }
+.demo-city :is(.maplibregl-canvas-container, .maplibregl-canvas) { position: absolute; left: 0; top: 0; }
