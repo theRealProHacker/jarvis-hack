@@ -56,21 +56,25 @@ async function settledHeight(el: HTMLElement) {
   return last
 }
 
+// Real readings in the default HUD: where the user is and the laptop's battery. They refresh as long as the
+// HUD still has these statements; once the agent replaces them, they are left alone.
+type Device = { lat?: number; lon?: number; accuracy?: number; city?: string; battery?: number; charging?: boolean }
+const live = (d: Device) =>
+  [
+    `position = Map(${d.lat == null ? 'null, 2' : `{lat: ${d.lat.toFixed(4)}, lon: ${d.lon!.toFixed(4)}}, 13, [{lat: ${d.lat.toFixed(4)}, lon: ${d.lon!.toFixed(4)}, label: "You"}]`})`,
+    `power = Progress(${d.battery ?? 0}, 100, "bar", "${d.charging ? 'Battery charging' : 'Battery'}")`,
+  ].join('\n')
+
 // The HUD the page starts with: a Mark VII flight display on simulated readings, laid out like the films'
-// helmet cam (big rings bleeding off the corners, small readouts round a clear centre). The agent edits it.
+// helmet cam: big rings bleeding off the corners, the centre left clear. The agent edits it.
 const DEFAULT_HUD = `root = Stack([hud])
-hud = Orbit({bigTopLeft: radar, bigTopRight: alert, bigLeft: altitude, bigRight: systems, bigBottomRight: suit, smallTop: status, smallInnerLeft: airspeed, smallInnerRight: horizon, smallInnerBottom: reactor, smallCluster1: clock, smallCluster2: fuel}, {bigTopLeft: 0.15})
+hud = Orbit({bigTopLeft: radar, bigTopRight: alert, bigLeft: altitude, bigRight: position, bigBottomRight: suit, smallCluster1: clock, smallCluster2: power}, {bigTopLeft: 0.15})
 radar = Radar([{angle: 42, dist: 0.62, tone: "danger"}, {angle: 118, dist: 0.35}, {angle: 290, dist: 0.8, tone: "ok"}], 150, "Range 40 km")
 alert = AlertPlate("Terrain", "danger", "Pull up")
 altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
-systems = SystemStatus([{name: "Repulsors", value: 87}, {name: "Flight control", value: 96, tone: "ok"}, {name: "Coolant", value: 64, tone: "warn"}, {name: "Life support", value: 99, tone: "ok"}], "Systems")
 suit = BodyMap("suit", "front", "stand", "xray", true, [{id: "l-forearm", status: "warn", label: "Left gauntlet 71%"}], null, true)
-status = StatusLine([{label: "Mode", value: "Flight"}, {label: "Heading", value: 272}])
-airspeed = Gauge(612, 0, 900, "arc", "Airspeed", "kn")
-horizon = ArtificialHorizon(4, -12)
-reactor = ArcReactor("round", 0.92)
 clock = Clock("${Intl.DateTimeFormat().resolvedOptions().timeZone}", "Local", "digital")
-fuel = Progress(64, 100, "bar", "Reserve")`
+${live({})}`
 
 // A program as named statements in order; a statement runs until the next line that starts a new one.
 function statements(program: string) {
@@ -199,6 +203,48 @@ export function App() {
     if (open) input.current?.focus()
   }, [open])
 
+  const [device, setDevice] = useState<Device>({})
+  const deviceRef = useRef(device)
+  // The readings the live statements on screen were last generated from.
+  const liveShown = useRef<Device>({})
+  deviceRef.current = device
+  useEffect(() => {
+    let precise = false
+    const poll = () =>
+      fetch('/api/device')
+        .then((r) => r.json())
+        .then(({ battery, location }) =>
+          setDevice((d) => ({ ...d, battery: battery?.percent, charging: battery?.charging, ...(!precise && location ? { lat: location.lat, lon: location.lon, city: location.city, accuracy: undefined } : {}) })),
+        )
+        .catch(() => {})
+    poll()
+    const timer = setInterval(poll, 60000)
+    const watch = navigator.geolocation?.watchPosition(
+      ({ coords }) => {
+        precise = true
+        setDevice((d) => ({ ...d, lat: coords.latitude, lon: coords.longitude, accuracy: Math.round(coords.accuracy), city: undefined }))
+      },
+      () => {},
+      { enableHighAccuracy: true },
+    )
+    return () => {
+      clearInterval(timer)
+      if (watch != null) navigator.geolocation.clearWatch(watch)
+    }
+  }, [])
+  useEffect(() => {
+    // Refresh only the live statements the HUD still shows as generated here (the agent may have changed them,
+    // e.g. drawn a route on the position map), and not while a change is streaming in.
+    const shown = new Map(statements(hud.current))
+    const update = statements(live(device)).filter(([n]) => shown.get(n) === statements(live(liveShown.current)).find(([m]) => m === n)?.[1])
+    if (!update.length || streaming) return
+    const next = merge(hud.current, update.map(([, text]) => text).join('\n'))
+    liveShown.current = device
+    if (next === hud.current) return
+    hud.current = next
+    setResponse(next)
+  }, [device, streaming])
+
   useEffect(() => {
     // Starts the agent session now, so the first question doesn't wait for it (and its MCP servers) to boot.
     fetch('/api/say', { method: 'POST', body: JSON.stringify({ system: SYSTEM }) })
@@ -259,7 +305,10 @@ export function App() {
     const el = stage.current!
     const available = availableHeight(el)
     const now = new Date()
-    const context = `It is ${now.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })} (time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}). The HUD is shown on a screen area of ${el.clientWidth}×${available}px and must fit without scrolling.`
+    const d = deviceRef.current
+    const where = d.lat == null ? '' : ` The user is at ${d.lat.toFixed(4)}, ${d.lon!.toFixed(4)} (${d.accuracy ? `±${d.accuracy} m` : `rough, from the IP address${d.city ? `, near ${d.city}` : ''}`}).`
+    const power = d.battery == null ? '' : ` Battery ${d.battery}%${d.charging ? ', charging' : ''}.`
+    const context = `It is ${now.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })} (time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}).${where}${power} The HUD is shown on a screen area of ${el.clientWidth}×${available}px and must fit without scrolling.`
     const current = `Current HUD program:\n${hud.current}`
     fetch('/api/say', { method: 'POST', body: JSON.stringify({ system: SYSTEM, text: `${text}\n\n(${context})\n\n${current}` }) })
   }

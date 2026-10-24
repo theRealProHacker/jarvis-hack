@@ -4,11 +4,12 @@
  *   GET  /api/events                      -> SSE: spoken text, HUD programs, status line, theme, end of turn
  *   POST /api/ui-result { id, height, available, width, screenshot } -> the browser's measurement and JPEG of a HUD change
  *   GET  /api/speak?text=…                -> ElevenLabs speech for one reply (mp3, streamed)
+ *   GET  /api/device                      -> the laptop's battery and a rough location from its IP (the page prefers the browser's)
  * MCP servers for the user's own data (Notion, …) come from jarvis.mcp.json, in Claude Code's .mcp.json format.
  */
 import { createSdkMcpServer, query, tool, type McpServerConfig, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
@@ -23,9 +24,9 @@ const PERSONA = `You are Jarvis, a voice assistant. The user talks to you out lo
 - A speech engine reads your replies aloud, so write them the way they should sound: normal casing instead of all caps ("to-dos", not "TODOS"), acronyms that are said as words in lowercase ("arc reactor", not "ARC reactor"), and times, dates and numbers as a person would say them ("ten past ten in the evening", "twenty-two degrees").
 - Speak first: start every response with what you are about to do or show, before any tool call, so the user hears you right away. When you change the HUD, say what it shows (e.g. read out the todos) before calling edit_ui: the HUD builds while you speak. When edit_ui or show_ui returns and the HUD is fine, end your turn without saying anything more.
 - Put detail on the HUD whenever a visual helps or the user asks for one. Leave the HUD alone when the user only asks a question.
-- The HUD stays on screen between turns, and every message ends with its current program. Change it with edit_ui: send only the statements to add or replace, and remove the ones to drop. To add a panel, define it and also redefine its parent (usually root or a row) with the new reference. In an Orbit HUD, put something new into an empty slot, or else into the slot showing the least important thing (simulated flight readings come first, the user's own data last): redefine that slot's statement, plus the Orbit statement if the slot was empty. Pick a big slot for charts, maps and lists, and when it is a corner slot that bleeds off the edge, set that corner's bleed to 0 in the Orbit statement so nothing gets cut off. Never rebuild the whole HUD to show something new; use show_ui only when the user asks for a fresh or different HUD.
+- The HUD stays on screen between turns, and every message ends with its current program. Change it with edit_ui: send only the statements to add or replace, and remove the ones to drop. To add a panel, define it and also redefine its parent (usually root or a row) with the new reference. The user wears the HUD while flying and must see through its middle: keep the centre and the inner slots empty unless the user asks for something there. In an Orbit HUD, put something new into an empty edge slot, or else into the slot showing the least important thing (simulated flight readings come first, the user's own data last): redefine that slot's statement, plus the Orbit statement if the slot was empty. Pick a big slot for charts, maps and lists, and when it is a corner slot that bleeds off the edge, set that corner's bleed to 0 in the Orbit statement so nothing gets cut off. Never rebuild the whole HUD to show something new; use show_ui only when the user asks for a fresh or different HUD.
 - When you change the HUD, say where the new panel is in plain words ("top right", "lower left", "on the right").
-- Use WebSearch and WebFetch for anything current (news, prices, places, events). Never invent live data. Weather needs no search: the Weather component fetches it live, and Clock shows the live time. For stock, index, currency and crypto prices use stock_quote.
+- Use WebSearch and WebFetch for anything current (news, prices, places, events). Never invent live data. Weather needs no search: the Weather component fetches it live, and Clock shows the live time. For stock, index, currency and crypto prices use stock_quote, and for directions use route and draw it on a Map (update the user's position map if the HUD has one).
 - When you search, fetch or look something up, call set_status with a few words saying what you are doing, e.g. "Checking Berlin weather", in the same response as that tool call, never on its own. It returns to "Standing by" by itself when you finish.
 - The result of edit_ui and show_ui says whether the HUD fits the screen and includes a screenshot of it. If it doesn't fit, or the screenshot shows a clear defect (cut off, overlapping, empty or broken panels), fix it with edit_ui, at most twice. Otherwise leave it.
 - Pick the theme to suit the moment with set_theme: jarvis for everyday use, friday when the user asks for FRIDAY, battle for fights, threats and alarms, targeting for tracking and aiming, patriot for Iron Patriot. Set it before changing the HUD so it builds in the right colors.
@@ -159,6 +160,47 @@ const stockQuote = tool(
   { alwaysLoad: true },
 )
 
+// The laptop's battery from sysfs, and where its IP address is (looked up once).
+function battery() {
+  const dir = '/sys/class/power_supply'
+  const bat = existsSync(dir) && readdirSync(dir).find((d) => d.startsWith('BAT'))
+  if (!bat) return null
+  const read = (f: string) => readFileSync(`${dir}/${bat}/${f}`, 'utf8').trim()
+  return { percent: +read('capacity'), charging: read('status') === 'Charging' }
+}
+
+let ipLocation: Promise<{ lat: number; lon: number; city: string } | null> | null = null
+const locateIp = () =>
+  (ipLocation ??= fetch('https://ipwho.is/')
+    .then((r) => r.json())
+    .then((j) => (j.success ? { lat: j.latitude, lon: j.longitude, city: j.city } : null))
+    .catch(() => null))
+
+// Road and path routes from the public OSRM servers on OpenStreetMap data (no key).
+const ROUTERS = {
+  car: 'https://router.project-osrm.org/route/v1/driving',
+  bike: 'https://routing.openstreetmap.de/routed-bike/route/v1/bike',
+  foot: 'https://routing.openstreetmap.de/routed-foot/route/v1/foot',
+} as const
+
+const route = tool(
+  'route',
+  'A real road or path route between places, from OpenStreetMap: distance, travel time and the route as {lat, lon} points to pass to Map as its route (with markers for start and end). Look up coordinates first if you only have names.',
+  {
+    from: z.object({ lat: z.number(), lon: z.number() }),
+    to: z.object({ lat: z.number(), lon: z.number() }),
+    mode: z.enum(['car', 'bike', 'foot']).optional().describe('Default car'),
+  },
+  async ({ from, to, mode = 'car' }) => {
+    const r = await fetch(`${ROUTERS[mode]}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=simplified&geometries=geojson`).then((r) => r.json())
+    const best = r.routes?.[0]
+    if (!best) return { content: [{ type: 'text', text: `No ${mode} route found (${r.code ?? 'error'}).` }] }
+    const points = best.geometry.coordinates.map(([lon, lat]: [number, number]) => ({ lat: +lat.toFixed(5), lon: +lon.toFixed(5) }))
+    return { content: [{ type: 'text', text: JSON.stringify({ mode, km: +(best.distance / 1000).toFixed(1), minutes: Math.round(best.duration / 60), points }) }] }
+  },
+  { alwaysLoad: true },
+)
+
 // An async queue of user turns: the session reads from it for as long as it lives.
 function inbox() {
   const waiting: SDKUserMessage[] = []
@@ -235,7 +277,7 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
         disallowedTools: disabled,
         // Bash is left out so every command goes through canUseTool and the destructive filter.
         allowedTools: [...TOOLS.filter((t) => t !== 'Bash'), 'mcp__jarvis', ...Object.keys(mcp).map((name) => `mcp__${name}`)],
-        mcpServers: { ...mcp, jarvis: createSdkMcpServer({ name: 'jarvis', tools: [editUi, showUi, setStatus, setTheme, stockQuote] }) },
+        mcpServers: { ...mcp, jarvis: createSdkMcpServer({ name: 'jarvis', tools: [editUi, showUi, setStatus, setTheme, stockQuote, route] }) },
         canUseTool: async (name, input) =>
           name === 'Bash' && DESTRUCTIVE.test(String(input.command))
             ? { behavior: 'deny', message: 'Blocked: this command can delete or destroy things. Tell the user what to run instead.' }
@@ -320,6 +362,10 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
         })
         res.statusCode = 204
         res.end()
+      })
+      server.middlewares.use('/api/device', async (_req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ battery: battery(), location: await locateIp() }))
       })
       server.middlewares.use('/api/speak', async (req, res) => {
         const text = new URL(req.url!, 'http://x').searchParams.get('text') ?? ''
