@@ -56,12 +56,15 @@ async function settledHeight(el: HTMLElement) {
   return last
 }
 
-// Real readings in the default HUD: where the user is and the laptop's battery. They refresh as long as the
-// HUD still has these statements; once the agent replaces them, they are left alone.
-type Device = { lat?: number; lon?: number; accuracy?: number; city?: string; battery?: number; charging?: boolean }
+// Where the user is, fixed for the demo.
+const HOME = { lat: 52.52675, lon: 13.39079, place: 'Linienstraße 144, Berlin' }
+
+// Live readings in the default HUD: the laptop's battery. They refresh as long as the HUD still shows them as
+// generated here; once the agent changes them, they are left alone.
+type Device = { battery?: number; charging?: boolean }
 const live = (d: Device) =>
   [
-    `position = Map(${d.lat == null ? 'null, 2' : `{lat: ${d.lat.toFixed(4)}, lon: ${d.lon!.toFixed(4)}}, 13, [{lat: ${d.lat.toFixed(4)}, lon: ${d.lon!.toFixed(4)}, label: "You"}]`})`,
+    `position = Map({lat: ${HOME.lat}, lon: ${HOME.lon}}, 14, [{lat: ${HOME.lat}, lon: ${HOME.lon}, label: "You"}])`,
     `power = Progress(${d.battery ?? 0}, 100, "bar", "${d.charging ? 'Battery charging' : 'Battery'}")`,
   ].join('\n')
 
@@ -121,6 +124,7 @@ export function App() {
   const playback = useRef<{ ctx: AudioContext; out: MediaStreamAudioDestinationNode } | null>(null)
   const frame = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   // The command bar floats over the HUD, hidden until "/" or push-to-talk opens it; sending or Escape hides it again.
   const [open, setOpen] = useState(false)
@@ -203,34 +207,44 @@ export function App() {
     if (open) input.current?.focus()
   }, [open])
 
+  // The HUD tilts slowly toward the mouse, up to TILT degrees at the screen edge: as the mouse circles the
+  // screen, the HUD's axis sweeps a cone around the centre. The frame and the orb stay put.
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const TILT = 6
+    const target = { x: 0, y: 0 }
+    const now = { x: 0, y: 0 }
+    const onMove = (e: MouseEvent) => {
+      target.x = (e.clientX / innerWidth) * 2 - 1
+      target.y = (e.clientY / innerHeight) * 2 - 1
+    }
+    let frame = requestAnimationFrame(function step() {
+      now.x += (target.x - now.x) * 0.03
+      now.y += (target.y - now.y) * 0.03
+      content.current?.style.setProperty('transform', `perspective(1400px) rotateY(${(now.x * TILT).toFixed(2)}deg) rotateX(${(-now.y * TILT).toFixed(2)}deg)`)
+      frame = requestAnimationFrame(step)
+    })
+    addEventListener('mousemove', onMove)
+    return () => {
+      cancelAnimationFrame(frame)
+      removeEventListener('mousemove', onMove)
+    }
+  }, [])
+
   const [device, setDevice] = useState<Device>({})
   const deviceRef = useRef(device)
   // The readings the live statements on screen were last generated from.
   const liveShown = useRef<Device>({})
   deviceRef.current = device
   useEffect(() => {
-    let precise = false
     const poll = () =>
       fetch('/api/device')
         .then((r) => r.json())
-        .then(({ battery, location }) =>
-          setDevice((d) => ({ ...d, battery: battery?.percent, charging: battery?.charging, ...(!precise && location ? { lat: location.lat, lon: location.lon, city: location.city, accuracy: undefined } : {}) })),
-        )
+        .then(({ battery }) => setDevice({ battery: battery?.percent, charging: battery?.charging }))
         .catch(() => {})
     poll()
     const timer = setInterval(poll, 60000)
-    const watch = navigator.geolocation?.watchPosition(
-      ({ coords }) => {
-        precise = true
-        setDevice((d) => ({ ...d, lat: coords.latitude, lon: coords.longitude, accuracy: Math.round(coords.accuracy), city: undefined }))
-      },
-      () => {},
-      { enableHighAccuracy: true },
-    )
-    return () => {
-      clearInterval(timer)
-      if (watch != null) navigator.geolocation.clearWatch(watch)
-    }
+    return () => clearInterval(timer)
   }, [])
   useEffect(() => {
     // Refresh only the live statements the HUD still shows as generated here (the agent may have changed them,
@@ -306,7 +320,7 @@ export function App() {
     const available = availableHeight(el)
     const now = new Date()
     const d = deviceRef.current
-    const where = d.lat == null ? '' : ` The user is at ${d.lat.toFixed(4)}, ${d.lon!.toFixed(4)} (${d.accuracy ? `±${d.accuracy} m` : `rough, from the IP address${d.city ? `, near ${d.city}` : ''}`}).`
+    const where = ` The user is at ${HOME.place} (${HOME.lat}, ${HOME.lon}).`
     const power = d.battery == null ? '' : ` Battery ${d.battery}%${d.charging ? ', charging' : ''}.`
     const context = `It is ${now.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })} (time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}).${where}${power} The HUD is shown on a screen area of ${el.clientWidth}×${available}px and must fit without scrolling.`
     const current = `Current HUD program:\n${hud.current}`
@@ -377,7 +391,7 @@ export function App() {
                 <StatusLine key={status} items={[{ label: status }]} size={16} marker />
               </div>
             </header>
-            <div className="visor-content">
+            <div className="visor-content" ref={content}>
               <div className="stage" ref={stage}>
                 <Renderer key={runKey} library={jarvisLibrary} response={response} isStreaming={streaming} />
               </div>
