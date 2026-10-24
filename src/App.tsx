@@ -69,11 +69,10 @@ const live = (d: Device) =>
   ].join('\n')
 
 // The HUD the page starts with: a Mark VII flight display on simulated readings, laid out like the films'
-// helmet cam: big rings bleeding off the corners, the centre left clear. The agent edits it.
+// helmet cam: instruments round the edges, the centre left clear for flying. The agent edits it.
 const DEFAULT_HUD = `root = Stack([hud])
-hud = Orbit({bigTopLeft: radar, bigTopRight: alert, bigLeft: altitude, bigRight: position, bigBottomRight: suit, smallCluster1: clock, smallCluster2: power}, {bigTopLeft: 0.15})
+hud = Orbit({bigTopLeft: radar, bigLeft: altitude, bigRight: position, bigBottomRight: suit, smallCluster1: clock, smallCluster2: power})
 radar = Radar([{angle: 42, dist: 0.62, tone: "danger"}, {angle: 118, dist: 0.35}, {angle: 290, dist: 0.8, tone: "ok"}], 150, "Range 40 km")
-alert = AlertPlate("Terrain", "danger", "Pull up")
 altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
 suit = BodyMap("suit", "front", "stand", "xray", true, [{id: "l-forearm", status: "warn", label: "Left gauntlet 71%"}], null, true)
 clock = Clock("${Intl.DateTimeFormat().resolvedOptions().timeZone}", "Local", "digital")
@@ -124,7 +123,6 @@ export function App() {
   const playback = useRef<{ ctx: AudioContext; out: MediaStreamAudioDestinationNode } | null>(null)
   const frame = useRef<HTMLDivElement>(null)
   const stage = useRef<HTMLDivElement>(null)
-  const content = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   // The command bar floats over the HUD, hidden until "/" or push-to-talk opens it; sending or Escape hides it again.
   const [open, setOpen] = useState(false)
@@ -206,30 +204,6 @@ export function App() {
   useEffect(() => {
     if (open) input.current?.focus()
   }, [open])
-
-  // The HUD tilts slowly toward the mouse, up to TILT degrees at the screen edge: as the mouse circles the
-  // screen, the HUD's axis sweeps a cone around the centre. The frame and the orb stay put.
-  useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const TILT = 6
-    const target = { x: 0, y: 0 }
-    const now = { x: 0, y: 0 }
-    const onMove = (e: MouseEvent) => {
-      target.x = (e.clientX / innerWidth) * 2 - 1
-      target.y = (e.clientY / innerHeight) * 2 - 1
-    }
-    let frame = requestAnimationFrame(function step() {
-      now.x += (target.x - now.x) * 0.03
-      now.y += (target.y - now.y) * 0.03
-      content.current?.style.setProperty('transform', `perspective(1400px) rotateY(${(now.x * TILT).toFixed(2)}deg) rotateX(${(-now.y * TILT).toFixed(2)}deg)`)
-      frame = requestAnimationFrame(step)
-    })
-    addEventListener('mousemove', onMove)
-    return () => {
-      cancelAnimationFrame(frame)
-      removeEventListener('mousemove', onMove)
-    }
-  }, [])
 
   const [device, setDevice] = useState<Device>({})
   const deviceRef = useRef(device)
@@ -391,7 +365,7 @@ export function App() {
                 <StatusLine key={status} items={[{ label: status }]} size={16} marker />
               </div>
             </header>
-            <div className="visor-content" ref={content}>
+            <div className="visor-content">
               <div className="stage" ref={stage}>
                 <Renderer key={runKey} library={jarvisLibrary} response={response} isStreaming={streaming} />
               </div>
