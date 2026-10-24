@@ -1,0 +1,343 @@
+{
+ "card": 94,
+ "TextContent": {
+  "full": 130,
+  "third": 154
+ },
+ "MarkDownRenderer": {
+  "full": 268,
+  "third": 268
+ },
+ "Callout": {
+  "full": 170,
+  "third": 170
+ },
+ "TextCallout": {
+  "full": 148,
+  "third": 148
+ },
+ "Image": {
+  "full": 879,
+  "third": 339
+ },
+ "ImageBlock": {
+  "full": 380,
+  "third": 348
+ },
+ "ImageGallery": {
+  "full": 482,
+  "third": 467
+ },
+ "CodeBlock": {
+  "full": 240,
+  "third": 240
+ },
+ "InlineHeader": {
+  "full": 153,
+  "third": 153
+ },
+ "Table": {
+  "full": 383,
+  "third": 383
+ },
+ "EditableTable": {
+  "full": 371,
+  "third": 371
+ },
+ "BarChart": {
+  "full": 462,
+  "third": 462
+ },
+ "LineChart": {
+  "full": 462,
+  "third": 462
+ },
+ "AreaChart": {
+  "full": 462,
+  "third": 462
+ },
+ "RadarChart": {
+  "full": 433,
+  "third": 433
+ },
+ "HorizontalBarChart": {
+  "full": 429,
+  "third": 429
+ },
+ "PieChart": {
+  "full": 406,
+  "third": 554
+ },
+ "RadialChart": {
+  "full": 406,
+  "third": 554
+ },
+ "SingleStackedBarChart": {
+  "full": 166,
+  "third": 177
+ },
+ "ScatterChart": {
+  "full": 452,
+  "third": 452
+ },
+ "Form": {
+  "full": 350,
+  "third": 350
+ },
+ "OptionCards": {
+  "full": 291,
+  "third": 545
+ },
+ "Buttons": {
+  "full": 138,
+  "third": 138
+ },
+ "Tabs": {
+  "full": 502,
+  "third": 502
+ },
+ "Accordion": {
+  "full": 297,
+  "third": 297
+ },
+ "Steps": {
+  "full": 340,
+  "third": 340
+ },
+ "Carousel": {
+  "full": 215,
+  "third": 215
+ },
+ "Separator": {
+  "full": 179,
+  "third": 179
+ },
+ "Icon": {
+  "full": 140,
+  "third": 140
+ },
+ "EntityList": {
+  "full": 351,
+  "third": 351
+ },
+ "ListBlock": {
+  "full": 338,
+  "third": 582
+ },
+ "Text": {
+  "full": 170,
+  "third": 246
+ },
+ "BoldText": {
+  "full": 170,
+  "third": 246
+ },
+ "IconText": {
+  "full": 170,
+  "third": 246
+ },
+ "ImageText": {
+  "full": 172,
+  "third": 250
+ },
+ "ImageTextLarge": {
+  "full": 402,
+  "third": 710
+ },
+ "MetricIndicatorInline": {
+  "full": 209,
+  "third": 324
+ },
+ "MetricIndicatorWithStrikethrough": {
+  "full": 261,
+  "third": 429
+ },
+ "SnippetCardBlock": {
+  "full": 238,
+  "third": 382
+ },
+ "OverviewCardBlock": {
+  "full": 209,
+  "third": 439
+ },
+ "ContextCardBlock": {
+  "full": 198,
+  "third": 406
+ },
+ "CompositeCardBlock": {
+  "full": 326,
+  "third": 558
+ },
+ "VisualCardBlock": {
+  "full": 388,
+  "third": 976
+ },
+ "VoiceOrb": {
+  "full": 285,
+  "third": 285
+ },
+ "BodyMap": {
+  "full": 426,
+  "third": 426
+ },
+ "GlobeFlat": {
+  "full": 598,
+  "third": 598
+ },
+ "Altimeter": {
+  "full": 430,
+  "third": 430
+ },
+ "ArtificialHorizon": {
+  "full": 346,
+  "third": 346
+ },
+ "Gauge": {
+  "full": 326,
+  "third": 326
+ },
+ "Heatmap": {
+  "full": 208,
+  "third": 208
+ },
+ "Knob": {
+  "full": 261,
+  "third": 261
+ },
+ "LadderScale": {
+  "full": 374,
+  "third": 374
+ },
+ "Progress": {
+  "full": 141,
+  "third": 141
+ },
+ "RadialBars": {
+  "full": 294,
+  "third": 294
+ },
+ "Sparkline": {
+  "full": 166,
+  "third": 166
+ },
+ "StatusWord": {
+  "full": 208,
+  "third": 208
+ },
+ "Timecode": {
+  "full": 124,
+  "third": 124
+ },
+ "Timeline": {
+  "full": 190,
+  "third": 190
+ },
+ "Waveform": {
+  "full": 186,
+  "third": 186
+ },
+ "AlertPlate": {
+  "full": 164,
+  "third": 164
+ },
+ "ArcReactor": {
+  "full": 239,
+  "third": 239
+ },
+ "CallerCard": {
+  "full": 192,
+  "third": 192
+ },
+ "CircuitTrace": {
+  "full": 326,
+  "third": 326
+ },
+ "Dock": {
+  "full": 172,
+  "third": 172
+ },
+ "GlassCard": {
+  "full": 191,
+  "third": 191
+ },
+ "HexButton": {
+  "full": 176,
+  "third": 176
+ },
+ "HexGrid": {
+  "full": 290,
+  "third": 290
+ },
+ "ModePanel": {
+  "full": 403,
+  "third": 403
+ },
+ "NodeGraph": {
+  "full": 326,
+  "third": 326
+ },
+ "SchematicCallout": {
+  "full": 186,
+  "third": 186
+ },
+ "StatusLine": {
+  "full": 120,
+  "third": 120
+ },
+ "SystemStatus": {
+  "full": 241,
+  "third": 241
+ },
+ "WedgePanel": {
+  "full": 472,
+  "third": 472
+ },
+ "Compass": {
+  "full": 487,
+  "third": 487
+ },
+ "Crosshair": {
+  "full": 282,
+  "third": 282
+ },
+ "Radar": {
+  "full": 408,
+  "third": 408
+ },
+ "Reticle": {
+  "full": 326,
+  "third": 326
+ },
+ "ScanRing": {
+  "full": 366,
+  "third": 366
+ },
+ "TargetLock": {
+  "full": 386,
+  "third": 386
+ },
+ "DotRing": {
+  "full": 284,
+  "third": 284
+ },
+ "GlyphField": {
+  "full": 346,
+  "third": 346
+ },
+ "Readout": {
+  "full": 154,
+  "third": 154
+ },
+ "Ring": {
+  "full": 294,
+  "third": 294
+ },
+ "SegmentRing": {
+  "full": 304,
+  "third": 304
+ },
+ "TickRing": {
+  "full": 348,
+  "third": 348
+ }
+}

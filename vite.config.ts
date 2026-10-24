@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 const kit = resolve(import.meta.dirname, '../jarvis-ui/packages/kit/src')
 
-// POST /api/generate { system, prompt } -> streams Claude's text back as plain text.
+// POST /api/generate { system, messages } -> streams Claude's text back as plain text.
 function claudeApi(apiKey: string): Plugin {
   const client = new Anthropic({ apiKey })
   return {
@@ -14,7 +14,7 @@ function claudeApi(apiKey: string): Plugin {
       server.middlewares.use('/api/generate', async (req, res) => {
         let body = ''
         for await (const chunk of req) body += chunk
-        const { system, prompt } = JSON.parse(body) as { system: string; prompt: string }
+        const { system, messages } = JSON.parse(body) as { system: string; messages: Anthropic.MessageParam[] }
         res.setHeader('Content-Type', 'text/plain; charset=utf-8')
         try {
           const stream = client.messages.stream({
@@ -22,7 +22,7 @@ function claudeApi(apiKey: string): Plugin {
             max_tokens: 16000,
             output_config: { effort: 'low' },
             system,
-            messages: [{ role: 'user', content: prompt }],
+            messages,
           })
           for await (const event of stream) {
             if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') res.write(event.delta.text)

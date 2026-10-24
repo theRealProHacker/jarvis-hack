@@ -23,4 +23,3 @@ body { background: #0b111b; color: #d6e4f0; font-family: system-ui, sans-serif; 
 }
 .command button:hover:not(:disabled) { background: #6cc0fa; }
 .command button:disabled { cursor: default; opacity: 0.6; }
-.stage { min-height: 60vh; }
