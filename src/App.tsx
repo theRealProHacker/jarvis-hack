@@ -52,11 +52,10 @@ export function App() {
   const [streaming, setStreaming] = useState(false)
   const [runKey, setRunKey] = useState(0)
   const [listening, setListening] = useState(false)
-  const recording = useRef<Recording | null>(null)
   const stage = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
-  // The command bar floats over the HUD: it hides once you send something, "/" brings it back and Escape hides it.
-  const [open, setOpen] = useState(true)
+  // The command bar floats over the HUD, hidden until "/" or push-to-talk opens it; sending or Escape hides it again.
+  const [open, setOpen] = useState(false)
   // Spoken replies play one after another; talking again cuts them off.
   const voice = useRef({ queue: Promise.resolve(), playing: new Set<HTMLAudioElement>() })
 
@@ -81,8 +80,13 @@ export function App() {
   }
 
   useEffect(() => {
+    const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // Opening the bar focuses the input, so Space held from there on still belongs to push-to-talk.
+      if (e.code === 'Space' && (recording.current || !typing(e))) {
+        e.preventDefault()
+        if (!e.repeat) listen()
+      } else if (e.key === 'Escape') {
         input.current?.blur()
         setOpen(false)
       } else if (e.key === '/' && !(e.target instanceof HTMLInputElement)) {
@@ -90,8 +94,17 @@ export function App() {
         setOpen(true)
       }
     }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || !recording.current) return
+      e.preventDefault()
+      stopListening()
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKeyUp)
+    }
   }, [])
 
   useEffect(() => {
@@ -137,23 +150,28 @@ export function App() {
     fetch('/api/say', { method: 'POST', body: JSON.stringify({ system: SYSTEM, text: `${text}\n\n(${context})` }) })
   }
 
-  async function talk() {
-    if (recording.current) {
-      const rec = recording.current
-      recording.current = null
-      setListening(false)
-      send(await rec.stop())
-      return
-    }
+  // Push-to-talk: hold Space (or press Talk, then Stop). While listening, the command bar shows the live transcript.
+  const recording = useRef<Promise<Recording | null> | null>(null)
+
+  function listen() {
+    if (recording.current) return
     hush()
     setPrompt('')
+    setOpen(true)
     setListening(true)
-    try {
-      recording.current = await record(setPrompt)
-    } catch (err) {
+    recording.current = record(setPrompt).catch((err) => {
       console.error(err)
-      setListening(false)
-    }
+      return null
+    })
+  }
+
+  async function stopListening() {
+    const pending = recording.current
+    if (!pending) return
+    recording.current = null
+    setListening(false)
+    const rec = await pending
+    if (rec) send(await rec.stop())
   }
 
   return (
@@ -168,7 +186,7 @@ export function App() {
         }}
       >
         <input value={prompt} onChange={(e) => setPrompt(e.target.value)} ref={input} placeholder="Ask Jarvis" aria-label="Command" />
-        <button type="button" className="mic" onClick={talk} aria-pressed={listening}>
+        <button type="button" className="mic" onClick={() => (recording.current ? stopListening() : listen())} aria-pressed={listening}>
           {listening ? 'Stop' : 'Talk'}
         </button>
         <button type="submit" disabled={listening}>
