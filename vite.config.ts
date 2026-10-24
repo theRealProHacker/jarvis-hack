@@ -19,7 +19,7 @@ function claudeApi(apiKey: string): Plugin {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8')
         try {
           const stream = client.messages.stream({
-            model: 'claude-opus-5-5',
+            model: 'claude-sonnet-5-5',
             max_tokens: 16000,
             output_config: { effort: 'low' },
             system,

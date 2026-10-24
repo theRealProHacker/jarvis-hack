@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
  * /measure.html (dev only): measures how tall each kit component renders, for the height table in
  * src/component-heights.json. Claude writes one sample program per component, every sample renders at
  * full width and in a one-third column, and the settled heights land on window.__heights.
+ * ?only=Clock,Map measures just those; components with a handwritten sample below need no Claude call.
  */
 
 const SYSTEM = jarvisLibrary.prompt(jarvisPromptOptions)
@@ -14,7 +15,13 @@ export const WIDTHS = { full: 1200, third: 390 } as const
 const SKIP = new Set(
   'Card CardHeader Stack Modal Series Col Slice ScatterSeries Point SelectItem CheckBoxItem RadioItem SwitchItem OptionCard TabItem AccordionItem StepsItem ListItem SnippetCardItem OverviewCardItem ContextCardItem CompositeCardItem VisualCardItem Label FormControl Input TextArea Select DatePicker Slider CheckBoxGroup RadioGroup SwitchGroup Button IconButton'.split(' '),
 )
-const NAMES = Object.keys(jarvisLibrary.components).filter((n) => !SKIP.has(n))
+const only = new URLSearchParams(location.search).get('only')?.split(',')
+const NAMES = Object.keys(jarvisLibrary.components).filter((n) => !SKIP.has(n) && (!only || only.includes(n)))
+const frame = (sample: string) => `root = Stack([card])\ncard = Card([head, sample])\nhead = CardHeader("Title", "Subtitle")\nsample = ${sample}`
+const HANDWRITTEN: Record<string, string> = {
+  Clock: frame('Clock("Europe/Berlin", "Berlin")'),
+  Map: frame('Map({lat: 52.52, lon: 13.405}, 11, [{lat: 52.5163, lon: 13.3777, label: "Brandenburg Gate"}, {lat: 52.5208, lon: 13.4094, label: "TV Tower"}])'),
+}
 const BASELINE = 'root = Stack([card])\ncard = Card([head])\nhead = CardHeader("Title", "Subtitle")'
 
 const unfence = (text: string) => text.replace(/^\s*```[\w-]*\n?/, '').replace(/\n?```\s*$/, '')
@@ -36,8 +43,10 @@ export function Measure() {
   const [programs, setPrograms] = useState<Record<string, string> | null>(null)
 
   useEffect(() => {
-    const batches = Array.from({ length: Math.ceil(NAMES.length / 15) }, (_, i) => NAMES.slice(i * 15, i * 15 + 15))
-    Promise.all(batches.map(samples)).then((all) => setPrograms({ _card: BASELINE, ...Object.assign({}, ...all) }))
+    const written = NAMES.filter((n) => !HANDWRITTEN[n])
+    const batches = Array.from({ length: Math.ceil(written.length / 15) }, (_, i) => written.slice(i * 15, i * 15 + 15))
+    const hand = Object.fromEntries(NAMES.filter((n) => HANDWRITTEN[n]).map((n) => [n, HANDWRITTEN[n]]))
+    Promise.all(batches.map(samples)).then((all) => setPrograms({ _card: BASELINE, ...hand, ...Object.assign({}, ...all) }))
   }, [])
 
   useEffect(() => {

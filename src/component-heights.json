@@ -339,5 +339,13 @@
  "TickRing": {
   "full": 348,
   "third": 348
+ },
+ "Clock": {
+  "full": 246,
+  "third": 246
+ },
+ "Map": {
+  "full": 426,
+  "third": 426
  }
 }
