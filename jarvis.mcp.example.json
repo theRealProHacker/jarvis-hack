@@ -2,7 +2,25 @@
   "mcpServers": {
     "notion": {
       "command": "node_modules/.bin/notion-mcp-server",
-      "env": { "NOTION_TOKEN": "${NOTION_API_TOKEN}" }
+      "env": { "NOTION_TOKEN": "${NOTION_API_TOKEN}" },
+      "disabledTools": [
+        "API-get-user",
+        "API-get-users",
+        "API-get-self",
+        "API-patch-page",
+        "API-post-page",
+        "API-delete-a-block",
+        "API-retrieve-a-page-property",
+        "API-retrieve-a-comment",
+        "API-create-a-comment",
+        "API-retrieve-a-data-source",
+        "API-update-a-data-source",
+        "API-create-a-data-source",
+        "API-list-data-source-templates",
+        "API-retrieve-a-database",
+        "API-move-page",
+        "API-update-page-markdown"
+      ]
     }
   }
 }

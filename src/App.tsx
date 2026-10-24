@@ -49,12 +49,19 @@ async function settledHeight(el: HTMLElement) {
   return last
 }
 
-// The HUD the page starts with; the agent edits it from there.
-const DEFAULT_HUD = `root = Stack([row])
-row = Stack([clockCard], "row")
-clockCard = Card([clockHead, clock])
-clockHead = CardHeader("Local time")
-clock = Clock("${Intl.DateTimeFormat().resolvedOptions().timeZone}")`
+// The HUD the page starts with, a Mark VII flight display with simulated readings; the agent edits it from there.
+const DEFAULT_HUD = `root = Stack([cockpit])
+cockpit = Stack([flight, attitude, sensors, suit], "row", "l", "center", "between")
+flight = Stack([altitude, airspeed], "column", "m", "center")
+altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
+airspeed = Gauge(612, 0, 900, "arc", "Airspeed", "kn", "normal", null, null, null, 190)
+attitude = Stack([horizon, systems], "column", "m", "center")
+horizon = ArtificialHorizon(4, -12, 290)
+systems = SystemStatus([{name: "Repulsors", value: 87}, {name: "Flight control", value: 96, tone: "ok"}, {name: "Coolant", value: 64, tone: "warn"}, {name: "Life support", value: 99, tone: "ok"}], "Systems")
+sensors = Stack([radar, reactor], "column", "m", "center")
+radar = Radar([{angle: 42, dist: 0.62, tone: "danger"}, {angle: 118, dist: 0.35}, {angle: 290, dist: 0.8, tone: "ok"}], 150, "Range 40 km")
+reactor = ArcReactor("round", 0.92, 170)
+suit = BodyMap("suit", "front", "stand", "xray", true, [{id: "l-forearm", status: "warn", label: "Left gauntlet 71%"}], null, true, 520)`
 
 // A program as named statements in order; a statement runs until the next line that starts a new one.
 function statements(program: string) {
@@ -184,12 +191,21 @@ export function App() {
   }, [open])
 
   useEffect(() => {
+    // Starts the agent session now, so the first question doesn't wait for it (and its MCP servers) to boot.
+    fetch('/api/say', { method: 'POST', body: JSON.stringify({ system: SYSTEM }) })
     let said = ''
     const events = new EventSource('/api/events')
     events.onmessage = async (msg) => {
       const e: Event = JSON.parse(msg.data)
-      if (e.type === 'text') said += e.text
-      else if (e.type === 'text_end') {
+      if (e.type === 'text') {
+        said += e.text
+        // Each finished sentence goes to the voice right away, so speech starts while the rest streams in.
+        const done = said.match(/^[^]*[.!?](?=\s+\S)/)?.[0]
+        if (done) {
+          speak(done.trim())
+          said = said.slice(done.length)
+        }
+      } else if (e.type === 'text_end') {
         if (said.trim()) speak(said.trim())
         said = ''
       } else if (e.type === 'ui_start') {
@@ -213,6 +229,8 @@ export function App() {
         const el = stage.current!
         const available = availableHeight(el)
         const height = await settledHeight(el)
+        // List items and charts animate in after the height settles; give them a moment before the screenshot.
+        await sleep(800)
         ;(window.__fit ??= []).push({ height, available, fits: height <= available })
         // A screenshot of the whole screen goes back too, so the agent can check its work and refer to it later.
         const screenshot = await domToJpeg(frame.current!, { scale: 0.6, quality: 0.7 })

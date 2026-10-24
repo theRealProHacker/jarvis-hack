@@ -1,6 +1,6 @@
 /*
  * Jarvis: one long-lived Claude Agent SDK session the browser talks to.
- *   POST /api/say { system, text }        -> queues a user turn (the first one starts the session)
+ *   POST /api/say { system, text? }       -> queues a user turn; the first call starts the session (the page sends one without text on load)
  *   GET  /api/events                      -> SSE: spoken text, HUD programs, status line, theme, end of turn
  *   POST /api/ui-result { id, height, available, width, screenshot } -> the browser's measurement and JPEG of a HUD change
  *   GET  /api/speak?text=…                -> ElevenLabs speech for one reply (mp3, streamed)
@@ -16,15 +16,17 @@ import { z } from 'zod'
 
 const PERSONA = `You are Jarvis, a voice assistant. The user talks to you out loud and hears your replies spoken.
 - Reply in one or two short spoken sentences. No markdown, lists or code in replies, and never read out a program.
+- A speech engine reads your replies aloud, so write them the way they should sound: normal casing instead of all caps ("to-dos", not "TODOS"), acronyms that are said as words in lowercase ("arc reactor", not "ARC reactor"), and times, dates and numbers as a person would say them ("ten past ten in the evening", "twenty-two degrees").
+- Speak first: start every response with what you are about to do or show, before any tool call, so the user hears you right away. When you change the HUD, say what it shows (e.g. read out the todos) before calling edit_ui: the HUD builds while you speak. When edit_ui or show_ui returns and the HUD is fine, end your turn without saying anything more.
 - Put detail on the HUD whenever a visual helps or the user asks for one. Leave the HUD alone when the user only asks a question.
 - The HUD stays on screen between turns, and every message ends with its current program. Change it with edit_ui: send only the statements to add or replace, and remove the ones to drop. To add a panel, define it and also redefine its parent (usually root or a row) with the new reference. Use show_ui only for a completely different HUD.
-- Use WebSearch and WebFetch for anything current (weather, news, prices, places, events). Never invent live data.
-- Before anything that takes a moment (searching, fetching, building the HUD), call set_status with a few words saying what you are doing, e.g. "Checking Berlin weather". Call it with "Standing by" when you are done.
+- Use WebSearch and WebFetch for anything current (news, prices, places, events). Never invent live data. Weather needs no search: the Weather component fetches it live, and Clock shows the live time.
+- When you search, fetch or look something up, call set_status with a few words saying what you are doing, e.g. "Checking Berlin weather", in the same response as that tool call, never on its own. It returns to "Standing by" by itself when you finish.
 - The result of edit_ui and show_ui says whether the HUD fits the screen and includes a screenshot of it. If it doesn't fit, or the screenshot shows a clear defect (cut off, overlapping, empty or broken panels), fix it with edit_ui, at most twice. Otherwise leave it.
 - Pick the theme to suit the moment with set_theme: jarvis for everyday use, friday when the user asks for FRIDAY, battle for fights, threats and alarms, targeting for tracking and aiming, patriot for Iron Patriot. Set it before changing the HUD so it builds in the right colors.
 - Other tools may give you the user's own data (notes, todos, calendars); use them when the user asks about their stuff.`
 
-const VOICE = 'CUvmi6RSy4BQr6vnMyEw'
+const VOICE = '4cYYCJZtDFOV61Rs1Eoa'
 
 const MODES = ['jarvis', 'friday', 'battle', 'targeting', 'patriot'] as const
 type Mode = (typeof MODES)[number]
@@ -145,10 +147,20 @@ const readJson = async (req: IncomingMessage) => {
 }
 
 // { mcpServers: { name: config } }, as in Claude Code's .mcp.json. \${VAR} is filled in from .env, so tokens stay there.
-function userMcpServers(env: Record<string, string>): Record<string, McpServerConfig> {
+// A server's disabledTools are kept out of the agent's context: big MCP servers cost tokens and time on every turn.
+function userMcpServers(env: Record<string, string>) {
   const file = new URL('../jarvis.mcp.json', import.meta.url)
-  if (!existsSync(file)) return {}
-  return JSON.parse(readFileSync(file, 'utf8').replace(/\$\{(\w+)\}/g, (_, name) => env[name] ?? '')).mcpServers
+  if (!existsSync(file)) return { servers: {}, disabled: [] }
+  const config: Record<string, McpServerConfig & { disabledTools?: string[] }> = JSON.parse(
+    readFileSync(file, 'utf8').replace(/\$\{(\w+)\}/g, (_, name) => env[name] ?? ''),
+  ).mcpServers
+  const servers: Record<string, McpServerConfig> = {}
+  const disabled: string[] = []
+  for (const [name, { disabledTools = [], ...server }] of Object.entries(config)) {
+    servers[name] = server as McpServerConfig
+    disabled.push(...disabledTools.map((tool) => `mcp__${name}__${tool}`))
+  }
+  return { servers, disabled }
 }
 
 export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: Record<string, string> }): Plugin {
@@ -157,7 +169,7 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
   function start(system: string) {
     const box = inbox()
     session = box
-    const mcp = userMcpServers(keys.env)
+    const { servers: mcp, disabled } = userMcpServers(keys.env)
     const q = query({
       prompt: box.messages(),
       options: {
@@ -165,6 +177,7 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
         effort: 'low',
         systemPrompt: `${PERSONA}\n\n${system}`,
         tools: ['WebSearch', 'WebFetch'],
+        disallowedTools: disabled,
         allowedTools: ['WebSearch', 'WebFetch', 'mcp__jarvis', ...Object.keys(mcp).map((name) => `mcp__${name}`)],
         mcpServers: { ...mcp, jarvis: createSdkMcpServer({ name: 'jarvis', tools: [editUi, showUi, setStatus, setTheme] }) },
         includePartialMessages: true,
@@ -182,8 +195,15 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
       })().catch(() => {}),
     )
     let ui: { index: number; json: string } | null = null
+    let spent = 0
     const handle = (m: SDKMessage) => {
-      if (m.type === 'result') return send({ type: 'done' })
+      if (m.type === 'result') {
+        const u = m.usage
+        console.log(`[jarvis] turn ${(m.duration_ms / 1000).toFixed(1)}s, input ${u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens} tokens (${u.cache_read_input_tokens} cached, ${u.cache_creation_input_tokens} written to cache), output ${u.output_tokens}, $${(m.total_cost_usd - spent).toFixed(3)}`)
+        spent = m.total_cost_usd // the SDK reports the session's running total
+        send({ type: 'status', text: 'Standing by' })
+        return send({ type: 'done' })
+      }
       if (m.type !== 'stream_event' || m.parent_tool_use_id) return
       const e = m.event
       if (e.type === 'content_block_start' && e.content_block.type === 'tool_use' && /__(show|edit)_ui$/.test(e.content_block.name)) {
@@ -224,7 +244,8 @@ export function jarvisAgent(keys: { anthropic: string; elevenlabs: string; env: 
       })
       server.middlewares.use('/api/say', async (req, res) => {
         const { system, text } = await readJson(req)
-        ;(session ?? start(system)).push(text)
+        const box = session ?? start(system)
+        if (text) box.push(text)
         res.statusCode = 204
         res.end()
       })
