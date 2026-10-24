@@ -1,17 +1,24 @@
-import { Compass, HudShell, JarvisProvider, Renderer, StatusLine, VoiceOrb, jarvisLibrary, jarvisPromptOptions, type JarvisMode } from '@jarvis-ui/kit'
+import { Compass, HudShell, JarvisProvider, Renderer, SIZING, StatusLine, VoiceOrb, jarvisLibrary, jarvisPromptOptions, type JarvisMode } from '@jarvis-ui/kit'
 import { domToJpeg } from 'modern-screenshot'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import HEIGHTS from './component-heights.json'
 import { record, type Recording } from './voice'
 
-const { card, ...heights } = HEIGHTS
-// Measured by /measure.html: lets Claude budget pixels before it builds, so the fit check rarely has to rebuild.
+const { card, ...measured } = HEIGHTS
+const heights: Record<string, { full: number; third: number }> = measured
+const px = ([w, h]: readonly [number, number]) => `${w}×${h}`
+// Natural and minimum sizes come from the kit; Card heights were measured by /measure.html. Together they let
+// Claude budget space before it builds, so the fit check rarely has to rebuild.
 const SYSTEM = `${jarvisLibrary.prompt(jarvisPromptOptions)}
 
-## Rendered heights
-Measured height in px of a Card with a CardHeader holding one component with typical data, at full width (1200px) / in a one-third column (390px). An empty Card with a CardHeader is ${card}px. Rows of side-by-side cards take the height of their tallest card; stacked rows add up, plus about 24px between them.
-${Object.entries(heights)
-  .map(([name, h]) => `${name}: ${h.full} / ${h.third}`)
+## Component sizes
+Outside Orbit, a component renders at its natural size (width×height px) unless you give it a width and height (its last two arguments). "scale" components keep their shape and never shrink below their minimum; "stretch" components fill the width they get. "in a Card" is the measured height of a Card with a CardHeader holding it at full width (1200px) / in a one-third column (390px); an empty Card with a CardHeader is ${card}px. Rows of side-by-side cards take the height of their tallest card; stacked rows add up, plus about 24px between them. Inside Orbit the slot decides the size.
+${[...new Set([...Object.keys(SIZING), ...Object.keys(heights)])]
+  .map((name) => {
+    const size = SIZING[name]
+    const inCard = heights[name] && `in a Card ${heights[name].full} / ${heights[name].third}`
+    return `${name}: ${[size && `natural ${px(size.natural)}, min ${px(size.min)}, ${size.mode}`, inCard].filter(Boolean).join('; ')}`
+  })
   .join('\n')}`
 
 type Event =
@@ -49,19 +56,21 @@ async function settledHeight(el: HTMLElement) {
   return last
 }
 
-// The HUD the page starts with, a Mark VII flight display with simulated readings; the agent edits it from there.
-const DEFAULT_HUD = `root = Stack([cockpit])
-cockpit = Stack([flight, attitude, sensors, suit], "row", "l", "center", "between")
-flight = Stack([altitude, airspeed], "column", "m", "center")
-altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
-airspeed = Gauge(612, 0, 900, "arc", "Airspeed", "kn", "normal", null, null, null, 190)
-attitude = Stack([horizon, systems], "column", "m", "center")
-horizon = ArtificialHorizon(4, -12, 290)
-systems = SystemStatus([{name: "Repulsors", value: 87}, {name: "Flight control", value: 96, tone: "ok"}, {name: "Coolant", value: 64, tone: "warn"}, {name: "Life support", value: 99, tone: "ok"}], "Systems")
-sensors = Stack([radar, reactor], "column", "m", "center")
+// The HUD the page starts with: a Mark VII flight display on simulated readings, laid out like the films'
+// helmet cam (big rings bleeding off the corners, small readouts round a clear centre). The agent edits it.
+const DEFAULT_HUD = `root = Stack([hud])
+hud = Orbit({bigTopLeft: radar, bigTopRight: alert, bigLeft: altitude, bigRight: systems, bigBottomRight: suit, smallTop: status, smallInnerLeft: airspeed, smallInnerRight: horizon, smallInnerBottom: reactor, smallCluster1: clock, smallCluster2: fuel}, {bigTopLeft: 0.15})
 radar = Radar([{angle: 42, dist: 0.62, tone: "danger"}, {angle: 118, dist: 0.35}, {angle: 290, dist: 0.8, tone: "ok"}], 150, "Range 40 km")
-reactor = ArcReactor("round", 0.92, 170)
-suit = BodyMap("suit", "front", "stand", "xray", true, [{id: "l-forearm", status: "warn", label: "Left gauntlet 71%"}], null, true, 520)`
+alert = AlertPlate("Terrain", "danger", "Pull up")
+altitude = Altimeter(12450, "ft", 820, 2000, 2500, 500)
+systems = SystemStatus([{name: "Repulsors", value: 87}, {name: "Flight control", value: 96, tone: "ok"}, {name: "Coolant", value: 64, tone: "warn"}, {name: "Life support", value: 99, tone: "ok"}], "Systems")
+suit = BodyMap("suit", "front", "stand", "xray", true, [{id: "l-forearm", status: "warn", label: "Left gauntlet 71%"}], null, true)
+status = StatusLine([{label: "Mode", value: "Flight"}, {label: "Heading", value: 272}])
+airspeed = Gauge(612, 0, 900, "arc", "Airspeed", "kn")
+horizon = ArtificialHorizon(4, -12)
+reactor = ArcReactor("round", 0.92)
+clock = Clock("${Intl.DateTimeFormat().resolvedOptions().timeZone}", "Local", "digital")
+fuel = Progress(64, 100, "bar", "Reserve")`
 
 // A program as named statements in order; a statement runs until the next line that starts a new one.
 function statements(program: string) {
@@ -230,7 +239,7 @@ export function App() {
         const available = availableHeight(el)
         const height = await settledHeight(el)
         // List items and charts animate in after the height settles; give them a moment before the screenshot.
-        await sleep(800)
+        await sleep(1500)
         ;(window.__fit ??= []).push({ height, available, fits: height <= available })
         // A screenshot of the whole screen goes back too, so the agent can check its work and refer to it later.
         const screenshot = await domToJpeg(frame.current!, { scale: 0.6, quality: 0.7 })
