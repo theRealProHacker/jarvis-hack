@@ -37,10 +37,25 @@ function claudeApi(apiKey: string): Plugin {
   }
 }
 
+// POST /api/reson8-token -> a 10-minute Reson8 access token, so the API key never reaches the browser.
+function reson8Token(apiKey: string): Plugin {
+  return {
+    name: 'reson8-token',
+    configureServer(server) {
+      server.middlewares.use('/api/reson8-token', async (_req, res) => {
+        const r = await fetch('https://api.reson8.dev/v1/auth/token', { method: 'POST', headers: { Authorization: `ApiKey ${apiKey}` } })
+        res.statusCode = r.status
+        res.setHeader('Content-Type', 'application/json')
+        res.end(await r.text())
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, import.meta.dirname, '')
   return {
-    plugins: [claudeApi(env.ANTHROPIC_API_KEY!), react()],
+    plugins: [claudeApi(env.ANTHROPIC_API_KEY!), reson8Token(env.RESON8_API_KEY!), react()],
     resolve: {
       alias: [
         { find: /^@jarvis-ui\/kit\/holo$/, replacement: `${kit}/holo.ts` },

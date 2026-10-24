@@ -2,6 +2,7 @@ import { Renderer } from '@openuidev/react-lang'
 import { JarvisProvider, jarvisLibrary, jarvisPromptOptions } from '@jarvis-ui/kit'
 import { useRef, useState, type FormEvent } from 'react'
 import HEIGHTS from './component-heights.json'
+import { record, type Recording } from './voice'
 
 const { card, ...heights } = HEIGHTS
 // Measured by /measure.html: lets Claude budget pixels before it builds, so the fit check rarely has to rebuild.
@@ -47,6 +48,8 @@ export function App() {
   const [streaming, setStreaming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [runKey, setRunKey] = useState(0)
+  const [listening, setListening] = useState(false)
+  const recording = useRef<Recording | null>(null)
   const stage = useRef<HTMLDivElement>(null)
 
   async function generate(messages: Message[]) {
@@ -69,8 +72,27 @@ export function App() {
     return text
   }
 
-  async function build(e: FormEvent) {
-    e.preventDefault()
+  async function talk() {
+    if (recording.current) {
+      const rec = recording.current
+      recording.current = null
+      setListening(false)
+      const text = await rec.stop()
+      setPrompt(text)
+      await build(text)
+      return
+    }
+    setPrompt('')
+    setListening(true)
+    try {
+      recording.current = await record(setPrompt)
+    } catch (err) {
+      console.error(err)
+      setListening(false)
+    }
+  }
+
+  async function build(prompt: string) {
     if (!prompt.trim() || busy) return
     setBusy(true)
     window.__fit = []
@@ -98,9 +120,18 @@ export function App() {
 
   return (
     <div className="app">
-      <form className="command" onSubmit={build}>
+      <form
+        className="command"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault()
+          build(prompt)
+        }}
+      >
         <input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe your HUD" aria-label="Command" autoFocus />
-        <button type="submit" disabled={busy}>
+        <button type="button" className="mic" onClick={talk} disabled={busy} aria-pressed={listening}>
+          {listening ? 'Stop' : 'Talk'}
+        </button>
+        <button type="submit" disabled={busy || listening}>
           {busy ? 'Building' : 'Build'}
         </button>
       </form>
